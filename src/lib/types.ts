@@ -129,6 +129,16 @@ export interface ProductScore {
   confidence: Confidence;
 }
 
+/** A public product image exists only after an operator records and approves
+ * its display right. It is never inferred from an ordinary product page. */
+export interface ProductMediaAsset {
+  id: string;
+  url: string;
+  alt: string;
+  kind: "packshot" | "detail" | "on_body" | "editorial" | "owned_photo";
+  attribution?: string;
+}
+
 export interface BraProduct {
   id: string;
   slug: string;
@@ -161,6 +171,7 @@ export interface BraProduct {
   price: { currency: string; amount: number; observedAt: string; priceType: "list" | "sale" };
   availability: "in_stock" | "low_stock" | "unknown" | "out_of_stock";
   score: ProductScore;
+  media?: ProductMediaAsset[];
   data: SourceAttribution[];
   updatedAt: string;
   productVersion: string;

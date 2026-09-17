@@ -1,4 +1,4 @@
-import type { BraProduct, Confidence, ProductScore, SourceAttribution } from "@/lib/types";
+import type { BraProduct, Confidence, ProductMediaAsset, ProductScore, SourceAttribution } from "@/lib/types";
 import { type CatalogProduct, type TightsProduct } from "@/lib/tights";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
@@ -75,7 +75,23 @@ function score(row: RecordValue | undefined, category: "bra" | "tights"): Produc
   };
 }
 
-function braProduct(row: RecordValue, scorecard: RecordValue | undefined): BraProduct | null {
+function approvedMedia(rows: RecordValue[], category: "bra" | "tights", productId: string): ProductMediaAsset[] {
+  const now = Date.now();
+  return rows
+    .filter((row) => String(category === "bra" ? row.product_id : row.tights_product_id) === productId)
+    .filter((row) => !row.licence_expires_at || Date.parse(String(row.licence_expires_at)) > now)
+    .sort((left, right) => Number(Boolean(right.is_primary)) - Number(Boolean(left.is_primary)) || String(left.created_at).localeCompare(String(right.created_at)))
+    .map((row) => ({
+      id: string(row.id),
+      url: string(row.delivery_url),
+      alt: string(row.alt_text),
+      kind: enumValue(row.media_kind, new Set<ProductMediaAsset["kind"]>(["packshot", "detail", "on_body", "editorial", "owned_photo"]), "packshot"),
+      attribution: string(row.attribution_text) || undefined,
+    }))
+    .filter((asset) => Boolean(asset.id && asset.url && asset.alt));
+}
+
+function braProduct(row: RecordValue, scorecard: RecordValue | undefined, media: RecordValue[]): BraProduct | null {
   const style = enumValue(row.style, braStyles, "t_shirt");
   const wire = enumValue(row.wire, wireTypes, "underwire");
   const cupConstruction = enumValue(row.cup_construction, cupConstructions, "unlined");
@@ -105,13 +121,14 @@ function braProduct(row: RecordValue, scorecard: RecordValue | undefined): BraPr
     price: { currency: "USD", amount: 0, observedAt: updatedAt, priceType: "list" },
     availability: "unknown",
     score: score(scorecard, "bra"),
+    media: approvedMedia(media, "bra", string(row.id)),
     data: source(officialUrl, updatedAt),
     updatedAt,
     productVersion: string(row.current_version, "1.0"),
   };
 }
 
-function tightsProduct(row: RecordValue, scorecard: RecordValue | undefined): TightsProduct | null {
+function tightsProduct(row: RecordValue, scorecard: RecordValue | undefined, media: RecordValue[]): TightsProduct | null {
   const brand = relatedBrand(row.brands);
   const updatedAt = string(row.updated_at, new Date(0).toISOString());
   const officialUrl = string(row.official_url) || undefined;
@@ -141,6 +158,7 @@ function tightsProduct(row: RecordValue, scorecard: RecordValue | undefined): Ti
     price: { currency: "USD", amount: 0, observedAt: updatedAt, priceType: "list" },
     availability: "unknown",
     score: score(scorecard, "tights"),
+    media: approvedMedia(media, "tights", string(row.id)),
     data: source(officialUrl, updatedAt),
     updatedAt,
     productVersion: string(row.current_version, "1.0"),
@@ -152,11 +170,12 @@ function tightsProduct(row: RecordValue, scorecard: RecordValue | undefined): Ti
 export async function getLiveCatalog(): Promise<LiveCatalogSnapshot> {
   const database = getSupabaseAdmin();
   if (!database) return { products: [], status: "unavailable", counts: { bras: 0, tights: 0, total: 0 } };
-  const [brasResult, tightsResult, braScoresResult, tightsScoresResult] = await Promise.all([
+  const [brasResult, tightsResult, braScoresResult, tightsScoresResult, mediaResult] = await Promise.all([
     database.from("products").select("id, slug, name, family, style, wire, cup_construction, support_level, material_composition, features, use_cases, size_system, size_range, official_url, current_version, updated_at, brands(name, country_code)").eq("lifecycle_status", "active").order("updated_at", { ascending: false }).limit(500),
     database.from("tights_products").select("id, slug, name, family, style, denier, opacity, waist_construction, toe_construction, warmth_level, compression_level, material_composition, features, use_cases, size_range, official_url, current_version, updated_at, brands(name, country_code)").eq("lifecycle_status", "active").order("updated_at", { ascending: false }).limit(500),
     database.from("product_scorecards").select("product_id, review_count, overall, comfort, band_comfort, cup_fit, wire_comfort, strap_comfort, stay_put, side_support, breathability, durability, size_accuracy, value"),
     database.from("tights_product_scorecards").select("product_id, review_count, overall, comfort, waist_comfort, coverage, stay_put, toe_comfort, breathability, durability, size_accuracy, value_score"),
+    database.from("product_media_assets").select("id, product_id, tights_product_id, delivery_url, alt_text, media_kind, attribution_text, licence_expires_at, is_primary, created_at").eq("rights_status", "approved"),
   ]);
   if (brasResult.error || tightsResult.error || braScoresResult.error || tightsScoresResult.error) {
     console.error("PerfectPair live catalogue query failed", { bras: brasResult.error?.message, tights: tightsResult.error?.message, braScores: braScoresResult.error?.message, tightsScores: tightsScoresResult.error?.message });
@@ -164,8 +183,10 @@ export async function getLiveCatalog(): Promise<LiveCatalogSnapshot> {
   }
   const braScores = new Map((braScoresResult.data ?? []).map((entry) => [String(entry.product_id), entry as RecordValue]));
   const tightsScores = new Map((tightsScoresResult.data ?? []).map((entry) => [String(entry.product_id), entry as RecordValue]));
-  const bras = (brasResult.data ?? []).map((entry) => braProduct(entry as RecordValue, braScores.get(String(entry.id)))).filter((entry): entry is BraProduct => Boolean(entry));
-  const tights = (tightsResult.data ?? []).map((entry) => tightsProduct(entry as RecordValue, tightsScores.get(String(entry.id)))).filter((entry): entry is TightsProduct => Boolean(entry));
+  if (mediaResult.error) console.warn("PerfectPair product-media registry is not available yet", mediaResult.error.message);
+  const media = (mediaResult.data ?? []) as RecordValue[];
+  const bras = (brasResult.data ?? []).map((entry) => braProduct(entry as RecordValue, braScores.get(String(entry.id)), media)).filter((entry): entry is BraProduct => Boolean(entry));
+  const tights = (tightsResult.data ?? []).map((entry) => tightsProduct(entry as RecordValue, tightsScores.get(String(entry.id)), media)).filter((entry): entry is TightsProduct => Boolean(entry));
   const products = [...bras, ...tights].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
   return { products, status: products.length ? "ready" : "empty", counts: { bras: bras.length, tights: tights.length, total: products.length } };
 }

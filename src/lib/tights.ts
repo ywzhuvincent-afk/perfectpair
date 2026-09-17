@@ -1,4 +1,4 @@
-import type { Confidence, FitLabel, ProductScore, SourceAttribution } from "@/lib/types";
+import type { Confidence, FitLabel, ProductMediaAsset, ProductScore, SourceAttribution } from "@/lib/types";
 
 export type TightsStyle = "sheer" | "semi_opaque" | "opaque" | "shaping" | "thermal" | "patterned";
 export type TightsOpacity = "ultra_sheer" | "sheer" | "semi_opaque" | "opaque";
@@ -64,6 +64,7 @@ export interface TightsProduct {
   price: { currency: string; amount: number; observedAt: string; priceType: "list" | "sale" };
   availability: "in_stock" | "low_stock" | "unknown" | "out_of_stock";
   score: ProductScore;
+  media?: ProductMediaAsset[];
   data: SourceAttribution[];
   updatedAt: string;
   productVersion: string;

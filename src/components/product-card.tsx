@@ -6,11 +6,12 @@ import { isTightsProduct, type CatalogProduct, type TightsMatchResult } from "@/
 
 export function ProductCard({ product, match }: { product: CatalogProduct; match?: MatchResult | TightsMatchResult }) {
   const tights = isTightsProduct(product);
+  const image = product.media?.[0];
   const detail = tights ? `${product.denier} denier · ${product.sizeRange}` : `${product.style.replace("_", " ")} · ${product.sizeRange}`;
   const hasCommunityScore = product.score.reviewCount > 0;
   const hasVerifiedPrice = product.price.amount > 0;
   return <article className="product-card">
-    <div className="product-image"><Image src={tights ? "/images/perfectpair-tights-category.png" : "/images/perfectpair-bra-category.png"} alt="" fill sizes="(max-width: 680px) 100vw, (max-width: 920px) 50vw, 25vw" /><span>{tights ? `${product.denier} denier` : product.wire === "wireless" ? "Wire-free" : product.style.replace("_", " ")}</span></div>
+    <div className={`product-image${image ? "" : " image-pending"}`}>{image ? <Image src={image.url} alt={image.alt} fill unoptimized sizes="(max-width: 680px) 100vw, (max-width: 920px) 50vw, 25vw" /> : <p>Image awaiting<br />authorisation</p>}<span>{tights ? `${product.denier} denier` : product.wire === "wireless" ? "Wire-free" : product.style.replace("_", " ")}</span></div>
     <div className="product-copy">
       <p className="eyebrow">{tights ? "Tights · " : "Bras · "}{product.brand}</p>
       <h3><Link href={`/products/${product.slug}`}>{product.name}</Link></h3>
