@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "generate:shared-schema": "node supabase/shared-project/generate-isolated-schema.mjs"
+    "generate:shared-schema": "node supabase/shared-project/generate-isolated-schema.mjs",
+    "generate:shared-upgrade": "node supabase/shared-project/generate-isolated-upgrade.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
