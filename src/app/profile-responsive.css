@@ -1,0 +1,4 @@
+@media (max-width: 680px) {
+  .detail-match { grid-column: auto; }
+  .product-hero h1 { font-size: 47px; }
+}
