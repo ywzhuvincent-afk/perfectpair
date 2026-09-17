@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BookOpenIcon, CompassIcon, HouseIcon, ScalesIcon, UserCircleIcon } from "@phosphor-icons/react/dist/ssr";
+import { ArrowRightIcon, BookOpenIcon, CompassIcon, HouseIcon, ScalesIcon, UserCircleIcon } from "@phosphor-icons/react/dist/ssr";
 
 const primary = [
   { href: "/discover", label: "Library" },
@@ -21,6 +21,7 @@ export function Nav() {
       <Link href="/discover"><CompassIcon size={20} weight="regular" /><span>Library</span></Link>
       <Link href="/compare"><ScalesIcon size={20} weight="regular" /><span>Compare</span></Link>
       <Link href="/passport"><BookOpenIcon size={20} weight="regular" /><span>Passport</span></Link>
+      <Link href="/pass-it-forward"><ArrowRightIcon size={20} weight="regular" /><span>Pass on</span></Link>
       <Link href="/profile"><UserCircleIcon size={20} weight="regular" /><span>Profile</span></Link>
     </nav>
   </>;
