@@ -159,6 +159,7 @@ create index if not exists product_media_assets_fit_product_lookup_idx
 
 alter table public.personal_fit_references add column if not exists fit_product_id uuid references public.fit_products(id) on delete set null;
 alter table public.personal_fit_references drop constraint if exists personal_fit_references_category_check;
+alter table public.personal_fit_references drop constraint if exists personal_fit_references_check;
 alter table public.personal_fit_references add constraint personal_fit_references_category_check
   check (
     (category = 'bra' and bra_product_id is not null and tights_product_id is null and fit_product_id is null)
@@ -169,6 +170,7 @@ alter table public.personal_fit_references add constraint personal_fit_reference
 
 alter table public.review_intake add column if not exists canonical_fit_product_id uuid references public.fit_products(id) on delete set null;
 alter table public.review_intake drop constraint if exists review_intake_category_check;
+alter table public.review_intake drop constraint if exists review_intake_check;
 alter table public.review_intake add constraint review_intake_category_check
   check (
     (category = 'bra' and canonical_tights_product_id is null and canonical_fit_product_id is null)
