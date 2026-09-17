@@ -159,7 +159,7 @@ create index if not exists fit_product_reviews_product_published_idx on perfectp
 create or replace view perfectpair.fit_product_scorecards as
 select r.product_id,
   count(*) filter (where r.moderation_state = 'published') as review_count,
-  round(avg(case when (r.scores ->> 'overall') ~ '^[1-5](\\.[0-9])?$' then (r.scores ->> 'overall')::numeric end) filter (where r.moderation_state = 'published'), 1) as overall
+  round(avg(case when (r.scores ->> 'overall') ~ '^[1-5]([.][0-9])?$' then (r.scores ->> 'overall')::numeric end) filter (where r.moderation_state = 'published'), 1) as overall
 from perfectpair.fit_product_reviews r
 group by r.product_id;
 
