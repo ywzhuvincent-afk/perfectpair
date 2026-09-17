@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { acceptReviewFrom } from "@/lib/contribution-rate-limit";
 
 const score = z.number().min(1).max(5);
 const fitIssue = z.enum(["band_digs", "band_rides_up", "cup_spillage", "cup_gaping", "wire_pokes", "wire_on_tissue", "straps_slip", "straps_dig", "gore_floats", "side_spillage", "cups_shift", "none"]);
@@ -23,7 +24,7 @@ const reviewSchema = z.object({
   }),
   issues: z.array(fitIssue).max(6).default([]),
   bodyProfileConsent: z.enum(["anonymous_matching", "private_only"]),
-  profileSnapshotId: z.string().uuid().optional(),
+  profileSnapshotId: z.string().uuid().optional(), companySite: z.literal("").optional(),
 });
 
 const tightsReviewSchema = z.object({
@@ -31,15 +32,19 @@ const tightsReviewSchema = z.object({
   scores: z.object({ overall: score, comfort: score, waistComfort: score, coverage: score, stayPut: score, toeComfort: score, breathability: score, durability: score, sizeAccuracy: score, value: score }),
   fitSignals: z.object({ sizing: z.enum(["runs_small", "true_to_size", "runs_large", "varies"]), waist: z.enum(["too_tight", "secure", "too_loose"]), coverage: z.enum(["too_sheer", "as_expected", "too_opaque"]), toe: z.enum(["comfortable", "noticeable", "uncomfortable"]) }),
   issues: z.array(z.enum(["waist_rolls", "waist_digs", "sags", "short_inseam", "toe_pressure", "snags", "too_warm", "not_warm_enough", "none"])).max(6).default([]),
-  bodyProfileConsent: z.enum(["anonymous_matching", "private_only"]), profileSnapshotId: z.string().uuid().optional(),
+  bodyProfileConsent: z.enum(["anonymous_matching", "private_only"]), profileSnapshotId: z.string().uuid().optional(), companySite: z.literal("").optional(),
 });
 
 export async function POST(request: NextRequest) {
+  const origin = request.headers.get("origin");
+  if (origin && origin !== request.nextUrl.origin) return NextResponse.json({ error: "Invalid submission origin." }, { status: 403 });
   const raw = await request.json().catch(() => null);
   const payload = typeof raw === "object" && raw !== null && "category" in raw && raw.category === "tights"
     ? tightsReviewSchema.safeParse(raw)
     : reviewSchema.safeParse(raw);
   if (!payload.success) return NextResponse.json({ error: "Invalid structured product review", details: payload.error.flatten() }, { status: 400 });
+  const address = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
+  if (!acceptReviewFrom(address)) return NextResponse.json({ error: "Too many reviews from this connection. Please try again later." }, { status: 429 });
   const database = getSupabaseAdmin();
   if (!database) return NextResponse.json({ error: "Review storage is temporarily unavailable. Please try again later." }, { status: 503 });
 
@@ -49,14 +54,15 @@ export async function POST(request: NextRequest) {
 
   try {
     if (canonicalId.success) {
-      const { data: product, error: productError } = await database.from(productTable).select("id").eq("id", canonicalId.data).maybeSingle();
+      const { data: product, error: productError } = await database.from(productTable).select("id, current_version").eq("id", canonicalId.data).eq("lifecycle_status", "active").maybeSingle();
       if (productError) throw productError;
       if (product) {
+        const currentVersion = product.current_version;
         if (review.category === "tights") {
           const tightsReview = tightsReviewSchema.parse(review);
           const { data, error } = await database.from("tights_reviews").insert({
             product_id: canonicalId.data,
-            product_version: tightsReview.productVersion,
+            product_version: currentVersion,
             size_bought: tightsReview.sizeBought,
             overall: tightsReview.scores.overall,
             comfort: tightsReview.scores.comfort,
@@ -79,7 +85,7 @@ export async function POST(request: NextRequest) {
         const braReview = reviewSchema.parse(review);
         const { data, error } = await database.from("reviews").insert({
           product_id: canonicalId.data,
-          product_version: braReview.productVersion,
+          product_version: currentVersion,
           size_bought: braReview.sizeBought,
           overall: braReview.scores.overall,
           comfort: braReview.scores.comfort,
