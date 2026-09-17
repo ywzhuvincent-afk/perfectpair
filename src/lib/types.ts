@@ -42,6 +42,50 @@ export interface BraProfile {
   profileMatchingConsent: boolean;
 }
 
+/** Shared lower-body context for leggings and jeans. It is deliberately
+ * separate from intimate-apparel data: members can begin with a familiar size
+ * and only add measurements when an official size chart makes them useful. */
+export interface LowerBodyProfile {
+  usualLeggingsSize?: string;
+  usualJeansWaist?: string;
+  usualJeansInseam?: string;
+  knownWorkingLeggings?: string;
+  knownWorkingJeans?: string;
+  heightCm?: number;
+  waistCm?: number;
+  hipCm?: number;
+  inseamCm?: number;
+  risePreference?: "low" | "mid" | "high" | "any";
+  compressionPreference?: "none" | "light" | "firm" | "any";
+  stretchPreference?: "rigid" | "some_stretch" | "stretch" | "any";
+  measurementConfidence?: MeasurementConfidence;
+  fitChangedRecently?: boolean;
+  priorities: Array<"comfort" | "waist_stability" | "seat_fit" | "length" | "compression" | "mobility" | "durability" | "value">;
+  avoid: Array<"waist_gapes" | "waist_rolls" | "thighs_tight" | "seat_bags" | "crotch_drops" | "too_short" | "too_long" | "see_through" | "none">;
+  profileMatchingConsent: boolean;
+}
+
+export interface LowerBodySnapshot {
+  id: string;
+  profile: LowerBodyProfile;
+  recordedAt: string;
+  label?: string;
+}
+
+/** A private planning record, never a public marketplace listing. It contains
+ * no price, address, payment information, messages, photos, or body data. */
+export interface PassItForwardDraft {
+  id: string;
+  category: "leggings" | "jeans";
+  productLabel: string;
+  sizeLabel: string;
+  condition: "new_with_tags" | "like_new" | "gently_worn";
+  marketplace: "vinted" | "depop" | "poshmark" | "other";
+  status: "draft" | "listed_elsewhere" | "closed";
+  createdAt: string;
+  updatedAt: string;
+}
+
 /** Privacy choices live beside—not inside—the fit facts so every purpose is
  * visible and reversible. All optional sharing starts off. */
 export interface PrivacyPreferences {

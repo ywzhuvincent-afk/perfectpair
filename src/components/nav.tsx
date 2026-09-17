@@ -6,6 +6,7 @@ const primary = [
   { href: "/compare", label: "Compare" },
   { href: "/contribute", label: "Contribute" },
   { href: "/passport", label: "My Passport" },
+  { href: "/pass-it-forward", label: "Pass it forward" },
 ];
 
 export function Nav() {

@@ -1,6 +1,6 @@
-# PerfectPair — 文胸与丝袜独立资料库
+# PerfectPair — 女性服装合身资料网络
 
-PerfectPair 是一个文胸与丝袜的私密穿着决策平台：用可选、可修改的个人资料帮助用户筛选产品，同时用来源核验、审核和发布流程建设可信的产品目录。
+PerfectPair 是一个文胸、丝袜、Leggings 与牛仔裤的私密穿着决策平台：用可选、可修改的个人资料帮助用户筛选产品，同时用来源核验、审核和发布流程建设可信的产品目录。核心原则是“买前更准确；不合适，也不浪费”。
 
 线上站点：[perfectpair-theta.vercel.app](https://perfectpair-theta.vercel.app/)
 管理后台：[perfectpair-theta.vercel.app/admin](https://perfectpair-theta.vercel.app/admin)
@@ -12,6 +12,8 @@ PerfectPair 是一个文胸与丝袜的私密穿着决策平台：用可选、�
 - 后台：候选录入、来源/版权核验、审核与发布已可用；
 - 自动化：每日候选更新及价格刷新任务已配置，任务只创建候选、不自动发布；
 - 隐私：MVP 私密资料默认本地保存，可跳过、修改和重置。
+- 四品类：Leggings/Jeans 的私密 Fit DNA、独立产品资料/评分架构和图片权利记录已就绪；商品会在来源审核后才发布。
+- 转让：`/pass-it-forward` 只生成 Leggings/Jeans 的私密外部上架草稿；不处理金流、地址、聊天、物流、退款或纠纷。
 
 ## 完整项目文档
 
@@ -23,6 +25,8 @@ PerfectPair 是一个文胸与丝袜的私密穿着决策平台：用可选、�
 - 自动更新、用户补全和运营流程；
 - 技术架构、环境变量、数据库安全部署、已知限制与后续优先级；
 - 所有研究和策略文档的索引。
+
+[womens-fit-network-expansion-plan.md](womens-fit-network-expansion-plan.md) 记录了四品类扩展、外部转让边界与数据接入顺序。
 
 ## 本地启动
 

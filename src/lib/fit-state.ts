@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { BraProfile, FitContext, FitSnapshot, PassportItem, PrivacyEvent, PrivacyEventType, PrivacyPreferences, WearEvent } from "@/lib/types";
+import type { BraProfile, FitContext, FitSnapshot, LowerBodyProfile, LowerBodySnapshot, PassItForwardDraft, PassportItem, PrivacyEvent, PrivacyEventType, PrivacyPreferences, WearEvent } from "@/lib/types";
 import type { TightsProfile, TightsSnapshot } from "@/lib/tights";
 
 const storageKey = "perfectpair-bra-fit-state-v1";
@@ -15,21 +15,25 @@ const defaultContext: FitContext = {
 type FitState = {
   profile: BraProfile;
   tightsProfile: TightsProfile;
+  lowerBodyProfile: LowerBodyProfile;
   snapshots: FitSnapshot[];
   tightsSnapshots: TightsSnapshot[];
+  lowerBodySnapshots: LowerBodySnapshot[];
   context: FitContext;
   passport: PassportItem[];
   wearEvents: WearEvent[];
+  handoffDrafts: PassItForwardDraft[];
   privacy: PrivacyPreferences;
   privacyEvents: PrivacyEvent[];
 };
 
 const emptyBraProfile = (): BraProfile => ({ commonUseCases: [], fitPriorities: [], avoid: [], profileMatchingConsent: false });
 const emptyTightsProfile = (): TightsProfile => ({ priorities: [], avoid: [], profileMatchingConsent: false });
+const emptyLowerBodyProfile = (): LowerBodyProfile => ({ priorities: [], avoid: [], profileMatchingConsent: false });
 const freshPrivacy = (): PrivacyPreferences => ({ anonymousMatching: false, aggregatedProductInsights: false, noticeVersion: "2026-09-14", updatedAt: new Date().toISOString() });
 
 function freshState(): FitState {
-  return { profile: emptyBraProfile(), tightsProfile: emptyTightsProfile(), snapshots: [], tightsSnapshots: [], context: defaultContext, passport: [], wearEvents: [], privacy: freshPrivacy(), privacyEvents: [] };
+  return { profile: emptyBraProfile(), tightsProfile: emptyTightsProfile(), lowerBodyProfile: emptyLowerBodyProfile(), snapshots: [], tightsSnapshots: [], lowerBodySnapshots: [], context: defaultContext, passport: [], wearEvents: [], handoffDrafts: [], privacy: freshPrivacy(), privacyEvents: [] };
 }
 
 function id(prefix: string) {
@@ -60,7 +64,8 @@ export function useFitState() {
             ...freshState(), ...parsed,
             profile: { ...emptyBraProfile(), ...parsed.profile },
             tightsProfile: { ...emptyTightsProfile(), ...parsed.tightsProfile },
-            snapshots: parsed.snapshots ?? [], tightsSnapshots: parsed.tightsSnapshots ?? [], passport: parsed.passport ?? [], wearEvents: parsed.wearEvents ?? [],
+            lowerBodyProfile: { ...emptyLowerBodyProfile(), ...parsed.lowerBodyProfile },
+            snapshots: parsed.snapshots ?? [], tightsSnapshots: parsed.tightsSnapshots ?? [], lowerBodySnapshots: parsed.lowerBodySnapshots ?? [], passport: parsed.passport ?? [], wearEvents: parsed.wearEvents ?? [], handoffDrafts: parsed.handoffDrafts ?? [],
             privacy: { ...freshPrivacy(), ...parsed.privacy }, privacyEvents: parsed.privacyEvents ?? [],
           });
         }
@@ -94,6 +99,14 @@ export function useFitState() {
     });
   }, []);
 
+  const saveLowerBodyProfile = useCallback((lowerBodyProfile: LowerBodyProfile, label?: string) => {
+    setState((current) => {
+      const changed = !sameProfile(current.lowerBodyProfile, lowerBodyProfile);
+      const snapshot: LowerBodySnapshot = { id: id("lower-body-snapshot"), profile: lowerBodyProfile, recordedAt: new Date().toISOString(), label: label || "Leggings and jeans profile updated" };
+      return { ...current, lowerBodyProfile, lowerBodySnapshots: changed ? [snapshot, ...current.lowerBodySnapshots] : current.lowerBodySnapshots };
+    });
+  }, []);
+
   const updatePrivacy = useCallback((patch: Partial<Pick<PrivacyPreferences, "anonymousMatching" | "aggregatedProductInsights">>) => {
     setState((current) => {
       const privacy = { ...current.privacy, ...patch, updatedAt: new Date().toISOString() };
@@ -106,7 +119,7 @@ export function useFitState() {
 
   const exportPrivateData = useCallback(() => {
     const exportedAt = new Date().toISOString();
-    const copy = { exportedAt, privacy: state.privacy, braProfile: state.profile, tightsProfile: state.tightsProfile, braSnapshots: state.snapshots, tightsSnapshots: state.tightsSnapshots, passport: state.passport, wearEvents: state.wearEvents };
+    const copy = { exportedAt, privacy: state.privacy, braProfile: state.profile, tightsProfile: state.tightsProfile, lowerBodyProfile: state.lowerBodyProfile, braSnapshots: state.snapshots, tightsSnapshots: state.tightsSnapshots, lowerBodySnapshots: state.lowerBodySnapshots, passport: state.passport, wearEvents: state.wearEvents, passItForwardDrafts: state.handoffDrafts };
     const url = URL.createObjectURL(new Blob([JSON.stringify(copy, null, 2)], { type: "application/json" }));
     const link = document.createElement("a");
     link.href = url; link.download = `perfectpair-private-data-${exportedAt.slice(0, 10)}.json`; link.click();
@@ -115,7 +128,7 @@ export function useFitState() {
   }, [state]);
 
   const eraseFitData = useCallback(() => {
-    setState((current) => ({ ...current, profile: emptyBraProfile(), tightsProfile: emptyTightsProfile(), snapshots: [], tightsSnapshots: [], wearEvents: [], privacy: freshPrivacy(), privacyEvents: [privacyEvent("fit_data_erased")] }));
+    setState((current) => ({ ...current, profile: emptyBraProfile(), tightsProfile: emptyTightsProfile(), lowerBodyProfile: emptyLowerBodyProfile(), snapshots: [], tightsSnapshots: [], lowerBodySnapshots: [], wearEvents: [], handoffDrafts: [], privacy: freshPrivacy(), privacyEvents: [privacyEvent("fit_data_erased")] }));
   }, []);
 
   const setContext = useCallback((context: FitContext) => setState((current) => ({ ...current, context })), []);
@@ -139,7 +152,20 @@ export function useFitState() {
     return { ...current, snapshots: [snapshot, ...current.snapshots], wearEvents: [newEvent, ...current.wearEvents], passport };
   }), []);
 
-  return useMemo(() => ({ ...state, hydrated, saveProfile, saveTightsProfile, updatePrivacy, exportPrivateData, eraseFitData, setContext, togglePassport, updatePassportState, addWearEvent }), [state, hydrated, saveProfile, saveTightsProfile, updatePrivacy, exportPrivateData, eraseFitData, setContext, togglePassport, updatePassportState, addWearEvent]);
+  const saveHandoffDraft = useCallback((draft: Omit<PassItForwardDraft, "id" | "createdAt" | "updatedAt">) => setState((current) => {
+    const now = new Date().toISOString();
+    const saved: PassItForwardDraft = { ...draft, id: id("pass-it-forward"), createdAt: now, updatedAt: now };
+    return { ...current, handoffDrafts: [saved, ...current.handoffDrafts].slice(0, 24) };
+  }), []);
+
+  const updateHandoffDraftStatus = useCallback((draftId: string, status: PassItForwardDraft["status"]) => setState((current) => ({
+    ...current,
+    handoffDrafts: current.handoffDrafts.map((draft) => draft.id === draftId ? { ...draft, status, updatedAt: new Date().toISOString() } : draft),
+  })), []);
+
+  const removeHandoffDraft = useCallback((draftId: string) => setState((current) => ({ ...current, handoffDrafts: current.handoffDrafts.filter((draft) => draft.id !== draftId) })), []);
+
+  return useMemo(() => ({ ...state, hydrated, saveProfile, saveTightsProfile, saveLowerBodyProfile, updatePrivacy, exportPrivateData, eraseFitData, setContext, togglePassport, updatePassportState, addWearEvent, saveHandoffDraft, updateHandoffDraftStatus, removeHandoffDraft }), [state, hydrated, saveProfile, saveTightsProfile, saveLowerBodyProfile, updatePrivacy, exportPrivateData, eraseFitData, setContext, togglePassport, updatePassportState, addWearEvent, saveHandoffDraft, updateHandoffDraftStatus, removeHandoffDraft]);
 }
 
 export const fitContextDefaults = defaultContext;
