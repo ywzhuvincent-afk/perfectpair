@@ -191,6 +191,7 @@ npm run generate:shared-schema
 - [品牌资料获取计划](brand-source-acquisition-plan.md)
 - [非联盟资料库策略](non-affiliate-catalog-strategy.md)
 - [目录持续覆盖执行手册](catalog-continuous-coverage-playbook.md)
+- [产品图片合规与授权执行规则](product-media-compliance-plan.md)
 - [设计质量检查](design-qa.md)
 
 ## 11. 变更记录
