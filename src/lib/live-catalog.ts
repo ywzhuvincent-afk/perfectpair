@@ -1,4 +1,5 @@
-import type { BraProduct, Confidence, ProductMediaAsset, ProductScore, SourceAttribution } from "@/lib/types";
+import "server-only";
+import type { BraProduct, Confidence, FitLabel, ProductMediaAsset, ProductScore, SourceAttribution } from "@/lib/types";
 import { type CatalogProduct, type TightsProduct } from "@/lib/tights";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
@@ -18,6 +19,7 @@ const tightsStyles = new Set<TightsProduct["style"]>(["sheer", "semi_opaque", "o
 const tightsOpacities = new Set<TightsProduct["opacity"]>(["ultra_sheer", "sheer", "semi_opaque", "opaque"]);
 const tightsWaists = new Set<TightsProduct["waist"]>(["regular", "high_waist", "control_top", "maternity"]);
 const tightsToes = new Set<Exclude<TightsProduct["toe"], "not_verified">>(["reinforced", "sheer", "sandal", "closed"]);
+const fitLabels = new Set<FitLabel>(["runs_small", "true_to_size", "runs_large", "varies"]);
 
 function string(value: unknown, fallback = "") {
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
@@ -51,6 +53,39 @@ function source(url: string | undefined, updatedAt: string): SourceAttribution[]
     confidence: "verified",
     verifiedAt: updatedAt,
   }];
+}
+
+function range(value: unknown): [number, number] | undefined {
+  if (typeof value !== "string") return undefined;
+  const match = /([[(])\s*(\d+)\s*,\s*(\d+)\s*([\])])/.exec(value);
+  if (!match) return undefined;
+  const lower = Number(match[2]) + (match[1] === "(" ? 1 : 0);
+  const upper = Number(match[3]) - (match[4] === ")" ? 1 : 0);
+  return Number.isInteger(lower) && Number.isInteger(upper) && lower <= upper ? [lower, upper] : undefined;
+}
+
+function cupRange(value: unknown): [string, string] | undefined {
+  const values = strings(value);
+  return values.length >= 2 ? [values[0], values[values.length - 1]] : undefined;
+}
+
+function construction(value: unknown): BraProduct["construction"] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const record = value as RecordValue;
+  const read = <Value extends string>(key: string, allowed: readonly Value[]) => {
+    const candidate = string(record[key]);
+    return (allowed as readonly string[]).includes(candidate) ? candidate as Value : undefined;
+  };
+  const closureRows = number(record.closureRows ?? record.closure_rows);
+  return {
+    goreHeight: read("goreHeight", ["low", "medium", "high"]),
+    wingHeight: read("wingHeight", ["low", "medium", "high"]),
+    strapPlacement: read("strapPlacement", ["centered", "wide_set", "racerback", "convertible"]),
+    closureRows: Number.isInteger(closureRows) && closureRows > 0 ? closureRows : undefined,
+    bandStretch: read("bandStretch", ["low", "medium", "high"]),
+    wireWidth: read("wireWidth", ["narrow", "average", "wide", "unknown"]),
+    cupDepth: read("cupDepth", ["shallow", "average", "projected", "unknown"]),
+  };
 }
 
 function score(row: RecordValue | undefined, category: "bra" | "tights"): ProductScore {
@@ -113,11 +148,13 @@ function braProduct(row: RecordValue, scorecard: RecordValue | undefined, media:
     material: strings(row.material_composition),
     features: strings(row.features),
     useCases: strings(row.use_cases).filter((value): value is BraProduct["useCases"][number] => ["everyday", "work", "lounge", "occasion", "travel", "exercise"].includes(value)),
-    fit: "varies",
-    fitNotes: ["Published from a reviewed product fact record. Check the current brand size chart before purchase."],
+    fit: enumValue(row.fit, fitLabels, "varies"),
+    fitNotes: strings(row.fit_notes).length ? strings(row.fit_notes) : ["Published from a reviewed product fact record. Check the current brand size chart before purchase."],
     sizeSystem: ["US_CA", "UK", "EU", "AU_NZ", "brand_specific"].includes(string(row.size_system)) ? string(row.size_system) as BraProduct["sizeSystem"] : "brand_specific",
     sizeRange: string(row.size_range, "See the current brand size chart"),
-    construction: {},
+    bandRange: range(row.band_range),
+    cupRange: cupRange(row.cup_range),
+    construction: construction(row.construction),
     price: { currency: "USD", amount: 0, observedAt: updatedAt, priceType: "list" },
     availability: "unknown",
     score: score(scorecard, "bra"),
@@ -146,8 +183,8 @@ function tightsProduct(row: RecordValue, scorecard: RecordValue | undefined, med
     material: strings(row.material_composition),
     features: strings(row.features),
     useCases: strings(row.use_cases).filter((value): value is TightsProduct["useCases"][number] => ["everyday", "work", "occasion", "travel", "cold_weather"].includes(value)),
-    fit: "varies",
-    fitNotes: ["Published from a reviewed product fact record. Check the current brand size chart before purchase."],
+    fit: enumValue(row.fit, fitLabels, "varies"),
+    fitNotes: strings(row.fit_notes).length ? strings(row.fit_notes) : ["Published from a reviewed product fact record. Check the current brand size chart before purchase."],
     sizeRange: string(row.size_range, "See the current brand size chart"),
     waist: enumValue(row.waist_construction, tightsWaists, "regular"),
     // Null in the canonical record means that the source did not establish a
@@ -171,8 +208,8 @@ export async function getLiveCatalog(): Promise<LiveCatalogSnapshot> {
   const database = getSupabaseAdmin();
   if (!database) return { products: [], status: "unavailable", counts: { bras: 0, tights: 0, total: 0 } };
   const [brasResult, tightsResult, braScoresResult, tightsScoresResult, mediaResult] = await Promise.all([
-    database.from("products").select("id, slug, name, family, style, wire, cup_construction, support_level, material_composition, features, use_cases, size_system, size_range, official_url, current_version, updated_at, brands(name, country_code)").eq("lifecycle_status", "active").order("updated_at", { ascending: false }).limit(500),
-    database.from("tights_products").select("id, slug, name, family, style, denier, opacity, waist_construction, toe_construction, warmth_level, compression_level, material_composition, features, use_cases, size_range, official_url, current_version, updated_at, brands(name, country_code)").eq("lifecycle_status", "active").order("updated_at", { ascending: false }).limit(500),
+    database.from("products").select("id, slug, name, family, style, wire, cup_construction, support_level, material_composition, features, use_cases, fit, fit_notes, size_system, size_range, band_range, cup_range, construction, official_url, current_version, updated_at, brands(name, country_code)").eq("lifecycle_status", "active").order("updated_at", { ascending: false }).limit(500),
+    database.from("tights_products").select("id, slug, name, family, style, denier, opacity, waist_construction, toe_construction, warmth_level, compression_level, material_composition, features, use_cases, fit, fit_notes, size_range, official_url, current_version, updated_at, brands(name, country_code)").eq("lifecycle_status", "active").order("updated_at", { ascending: false }).limit(500),
     database.from("product_scorecards").select("product_id, review_count, overall, comfort, band_comfort, cup_fit, wire_comfort, strap_comfort, stay_put, side_support, breathability, durability, size_accuracy, value"),
     database.from("tights_product_scorecards").select("product_id, review_count, overall, comfort, waist_comfort, coverage, stay_put, toe_comfort, breathability, durability, size_accuracy, value_score"),
     database.from("product_media_assets").select("id, product_id, tights_product_id, delivery_url, alt_text, media_kind, attribution_text, licence_expires_at, is_primary, created_at").eq("rights_status", "approved"),

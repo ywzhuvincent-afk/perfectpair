@@ -1,4 +1,3 @@
-import { products } from "@/lib/mock-data";
 import type { BraProduct, BraProfile, FitContext, FitIssue, MatchResult, WireType } from "@/lib/types";
 
 const clamp = (value: number) => Math.max(0, Math.min(100, Math.round(value)));
@@ -142,6 +141,11 @@ export function matchProduct(product: BraProduct, profile: BraProfile, context?:
   };
 }
 
-export function getMatches(profile: BraProfile, catalog: BraProduct[] = products, context?: FitContext) {
+/**
+ * Rank an explicitly supplied, published catalogue. Keeping the catalogue
+ * required prevents a route from silently falling back to development
+ * fixtures when the live database is empty or unavailable.
+ */
+export function getMatches(profile: BraProfile, catalog: BraProduct[], context?: FitContext) {
   return catalog.map((product) => matchProduct(product, profile, context)).sort((a, b) => b.score - a.score);
 }

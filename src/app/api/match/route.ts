@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getMatches } from "@/lib/match";
 import { getTightsMatches } from "@/lib/tights-match";
-import { tightsProducts } from "@/lib/tights";
+import { getLiveCatalog } from "@/lib/live-catalog";
+import { isTightsProduct } from "@/lib/tights";
 
 const profileSchema = z.object({
   heightCm: z.number().min(100).max(250).optional(),
@@ -43,18 +44,26 @@ const tightsProfileSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
-  const raw = await request.json();
+  const raw = await request.json().catch(() => null);
+  if (!raw || typeof raw !== "object") return NextResponse.json({ error: "Invalid match request" }, { status: 400 });
+  const catalog = await getLiveCatalog();
+  if (catalog.status === "unavailable") {
+    return NextResponse.json({ error: "The reviewed catalogue is temporarily unavailable. Please try again shortly." }, { status: 503 });
+  }
+  const bras = catalog.products.filter((product) => !isTightsProduct(product));
+  const tightsProducts = catalog.products.filter(isTightsProduct);
   if (raw.category === "tights") {
     const tights = z.object({ category: z.literal("tights"), profile: tightsProfileSchema }).safeParse(raw);
     if (!tights.success) return NextResponse.json({ error: "Invalid Tights Profile", details: tights.error.flatten() }, { status: 400 });
-    return NextResponse.json({ data: getTightsMatches(tights.data.profile, tightsProducts), policy: "Money Never Changes Match", personalMatch: "Private tights preference + product construction + moderated community evidence; never affiliate rate, sponsorship, or brand payment.", sizeNotice: "A suggested size is a starting point only. Confirm the current brand chart and return policy before ordering." });
+    return NextResponse.json({ data: getTightsMatches(tights.data.profile, tightsProducts), policy: "Money Never Changes Match", personalMatch: "Private tights preference + product construction + moderated community evidence; never affiliate rate, sponsorship, or brand payment.", sizeNotice: "A suggested size is a starting point only. Confirm the current brand chart and return policy before ordering.", catalog: { status: catalog.status, counts: catalog.counts, publication: "Published canonical records only" } });
   }
   const result = z.object({ profile: profileSchema, context: contextSchema.optional() }).safeParse(raw);
   if (!result.success) return NextResponse.json({ error: "Invalid Bra Profile", details: result.error.flatten() }, { status: 400 });
   return NextResponse.json({
-    data: getMatches(result.data.profile, undefined, result.data.context),
+    data: getMatches(result.data.profile, bras, result.data.context),
     policy: "Money Never Changes Match",
     personalMatch: "Profile + temporary wear need + consented community evidence; never affiliate rate, sponsorship, or brand payment.",
     sizeNotice: "A suggested size is a starting point only. Confirm the current brand chart and return policy before ordering.",
+    catalog: { status: catalog.status, counts: catalog.counts, publication: "Published canonical records only" },
   });
 }
