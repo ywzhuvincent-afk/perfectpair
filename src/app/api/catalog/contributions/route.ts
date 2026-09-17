@@ -9,7 +9,7 @@ const optionalEmail = z.string().trim().email().max(254).optional().or(z.literal
 
 const contributionSchema = z.object({
   type: z.enum(["missing_product", "correction", "brand_claim"]),
-  category: z.enum(["bra", "tights", "both"]),
+  category: z.enum(["bra", "tights", "leggings", "jeans", "all"]),
   brandName: z.string().trim().min(1).max(120),
   productName: optionalText(180),
   variantLabel: optionalText(100),
@@ -31,7 +31,7 @@ const contributionSchema = z.object({
   if (value.type === "brand_claim" && value.relationship !== "i_represent_the_brand") {
     context.addIssue({ code: "custom", path: ["relationship"], message: "Brand claims must be submitted by a brand representative." });
   }
-  if (value.type !== "brand_claim" && value.category === "both") {
+  if (value.type !== "brand_claim" && value.category === "all") {
     context.addIssue({ code: "custom", path: ["category"], message: "Missing-product and correction reports need one category." });
   }
 });

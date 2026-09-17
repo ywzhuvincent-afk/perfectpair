@@ -8,7 +8,7 @@ export type OperatorProductDraft = {
   material: string[];
   sizeRange?: string;
   productIdentifier?: string;
-  categoryHint?: "bra" | "tights";
+  categoryHint?: "bra" | "tights" | "leggings" | "jeans";
   denierHint?: number;
   warnings: string[];
 };
@@ -194,6 +194,8 @@ function inferCategory(...values: Array<unknown>) {
   const content = values.map((entry) => typeof entry === "string" ? entry : "").join(" ").toLowerCase();
   if (/\b(bra|bralette|lingerie|underwire)\b/.test(content)) return "bra" as const;
   if (/\b(tight|pantyhose|hosiery|stocking)\b/.test(content)) return "tights" as const;
+  if (/\b(legging|activewear|athletic tight)\b/.test(content)) return "leggings" as const;
+  if (/\b(jean|denim)\b/.test(content)) return "jeans" as const;
   return undefined;
 }
 

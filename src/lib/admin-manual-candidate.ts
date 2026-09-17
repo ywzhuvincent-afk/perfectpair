@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import { writeAdminAudit } from "@/lib/admin-data";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import type { ProductCategory } from "@/lib/types";
 
 const sourceSlug = "operator-verified-facts";
 const httpsUrl = z.string().url().max(2_000).refine((value) => new URL(value).protocol === "https:", "An HTTPS source URL is required.");
@@ -24,10 +25,30 @@ const tightsProduct = baseProduct.extend({
   waist: z.enum(["regular", "high_waist", "control_top", "maternity"]),
   toe: z.enum(["reinforced", "sheer", "sandal", "closed"]).optional(),
 });
+const leggingsProduct = baseProduct.extend({
+  rise: z.enum(["low", "mid", "high"]),
+  compression: z.enum(["none", "light", "firm"]).optional(),
+  stretch: z.enum(["rigid", "some_stretch", "stretch"]).optional(),
+  inseam: z.string().trim().min(1).max(60).optional(),
+}).transform(({ rise, compression, stretch, inseam, ...product }) => ({
+  ...product,
+  attributes: Object.fromEntries(Object.entries({ rise, compression, stretch, inseam }).filter(([, value]) => value !== undefined)),
+}));
+const jeansProduct = baseProduct.extend({
+  cut: z.enum(["skinny", "slim", "straight", "wide_leg", "bootcut", "flare", "relaxed", "boyfriend", "barrel"]),
+  rise: z.enum(["low", "mid", "high"]),
+  stretch: z.enum(["rigid", "some_stretch", "stretch"]).optional(),
+  inseam: z.string().trim().min(1).max(60).optional(),
+}).transform(({ cut, rise, stretch, inseam, ...product }) => ({
+  ...product,
+  attributes: Object.fromEntries(Object.entries({ cut, rise, stretch, inseam }).filter(([, value]) => value !== undefined)),
+}));
 
 export const manualCandidateSchema = z.discriminatedUnion("category", [
   z.object({ category: z.literal("bra"), canonicalUrl: httpsUrl, product: braProduct }),
   z.object({ category: z.literal("tights"), canonicalUrl: httpsUrl, product: tightsProduct }),
+  z.object({ category: z.literal("leggings"), canonicalUrl: httpsUrl, product: leggingsProduct }),
+  z.object({ category: z.literal("jeans"), canonicalUrl: httpsUrl, product: jeansProduct }),
 ]);
 
 function database() {
@@ -49,10 +70,10 @@ async function manualSource() {
       legal_basis: "manual_import",
       crawl_policy: { format: "manual_operator_entry", no_automated_fetch: true },
       enabled: false,
-      allowed_categories: ["bra", "tights"],
+      allowed_categories: ["bra", "tights", "leggings", "jeans"],
       accountable_owner: "PerfectPair operator",
       robots_policy: "not_applicable",
-      permitted_fields: ["brand", "name", "construction", "material", "sizeRange", "denier", "officialUrl"],
+      permitted_fields: ["brand", "name", "construction", "material", "sizeRange", "denier", "rise", "cut", "stretch", "compression", "inseam", "officialUrl"],
       content_handling: "manual_facts_only",
       automated_access_permitted: false,
       publication_permitted: true,
@@ -60,6 +81,12 @@ async function manualSource() {
     if (error || !data) throw new Error(error?.message ?? "Could not create the manual-facts source.");
     sourceId = data.id as string;
   }
+  const allowedFields = ["brand", "name", "construction", "material", "sizeRange", "denier", "rise", "cut", "stretch", "compression", "inseam", "officialUrl"];
+  const { error: sourceUpdateError } = await client.from("ingestion_sources").update({
+    allowed_categories: ["bra", "tights", "leggings", "jeans"],
+    permitted_fields: allowedFields,
+  }).eq("id", sourceId);
+  if (sourceUpdateError) throw new Error(`Could not update the manual-facts source: ${sourceUpdateError.message}`);
   const { data: approved, error: rightsError } = await client.from("source_rights_reviews").select("id").eq("source_id", sourceId).eq("status", "approved").maybeSingle();
   if (rightsError) throw new Error(`Could not load manual-facts permission record: ${rightsError.message}`);
   if (approved) return { sourceId, rightsReviewId: approved.id as string };
@@ -68,7 +95,7 @@ async function manualSource() {
     policy_version: "1.0",
     status: "approved",
     legal_basis: "manual_import",
-    allowed_fields: ["brand", "name", "construction", "material", "sizeRange", "denier", "officialUrl"],
+    allowed_fields: allowedFields,
     content_handling: "manual_facts_only",
     automated_access_permitted: false,
     publication_permitted: true,
@@ -78,7 +105,7 @@ async function manualSource() {
   return { sourceId, rightsReviewId: rights.id as string };
 }
 
-async function existingRecord(category: "bra" | "tights", canonicalUrl: string) {
+async function existingRecord(category: ProductCategory, canonicalUrl: string) {
   const client = database();
   const { data: candidate, error: candidateError } = await client
     .from("ingestion_candidates")
@@ -90,12 +117,10 @@ async function existingRecord(category: "bra" | "tights", canonicalUrl: string) 
   if (candidateError) throw new Error(`Could not check the candidate queue: ${candidateError.message}`);
   if (candidate) return { id: candidate.id as string, state: candidate.status as string, type: "candidate" as const };
 
-  const productTable = category === "bra" ? "products" : "tights_products";
-  const { data: product, error: productError } = await client
-    .from(productTable)
-    .select("id")
-    .eq("official_url", canonicalUrl)
-    .maybeSingle();
+  const productTable = category === "bra" ? "products" : category === "tights" ? "tights_products" : "fit_products";
+  let query = client.from(productTable).select("id").eq("official_url", canonicalUrl);
+  if (category === "leggings" || category === "jeans") query = query.eq("category", category);
+  const { data: product, error: productError } = await query.maybeSingle();
   if (productError) throw new Error(`Could not check published products: ${productError.message}`);
   return product ? { id: product.id as string, state: "published", type: "product" as const } : null;
 }

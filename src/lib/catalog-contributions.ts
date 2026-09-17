@@ -1,5 +1,5 @@
 export type ContributionType = "missing_product" | "correction" | "brand_claim";
-export type ContributionCategory = "bra" | "tights" | "both";
+export type ContributionCategory = "bra" | "tights" | "leggings" | "jeans" | "all";
 
 export interface CatalogContributionReceipt {
   id: string;

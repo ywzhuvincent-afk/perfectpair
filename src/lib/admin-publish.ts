@@ -60,7 +60,7 @@ async function candidateSource(candidate: { run_id: string; canonical_url: strin
   return { sourceName: source.name as string, sourceKind: source.source_kind as string, sourceUrl: candidate.canonical_url, runId: candidate.run_id };
 }
 
-async function recordObservations(table: "product_observations" | "tights_product_observations", productId: string, payload: Record<string, unknown>, source: Awaited<ReturnType<typeof candidateSource>>) {
+async function recordObservations(table: "product_observations" | "tights_product_observations" | "fit_product_observations", productId: string, payload: Record<string, unknown>, source: Awaited<ReturnType<typeof candidateSource>>) {
   const client = database();
   const observedAt = new Date().toISOString();
   const rows = Object.entries(payload)
@@ -81,6 +81,27 @@ async function recordObservations(table: "product_observations" | "tights_produc
   if (!rows.length) return;
   const { error } = await client.from(table).insert(rows);
   fail(error, "Could not store field provenance");
+}
+
+function lowerBodyAttributes(category: "leggings" | "jeans", value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Lower-body candidate is missing verified fit attributes.");
+  const input = value as Record<string, unknown>;
+  const allowedKeys = category === "leggings" ? ["rise", "compression", "stretch", "inseam"] : ["cut", "rise", "stretch", "inseam"];
+  const attributes = Object.fromEntries(Object.entries(input)
+    .filter(([key, entry]) => allowedKeys.includes(key) && typeof entry === "string" && entry.trim())
+    .map(([key, entry]) => [key, (entry as string).trim()]));
+  const rise = attributes.rise;
+  if (rise !== "low" && rise !== "mid" && rise !== "high") throw new Error("Lower-body candidate needs a verified low, mid or high rise.");
+  if (category === "leggings") {
+    if (attributes.compression && !["none", "light", "firm"].includes(attributes.compression)) throw new Error("Leggings compression must be none, light or firm.");
+  } else {
+    if (!attributes.cut || !["skinny", "slim", "straight", "wide_leg", "bootcut", "flare", "relaxed", "boyfriend", "barrel"].includes(attributes.cut)) {
+      throw new Error("Jeans candidate needs a verified supported cut.");
+    }
+  }
+  if (attributes.stretch && !["rigid", "some_stretch", "stretch"].includes(attributes.stretch)) throw new Error("Stretch must be rigid, some_stretch or stretch.");
+  if (attributes.inseam && attributes.inseam.length > 60) throw new Error("Inseam value is too long.");
+  return attributes;
 }
 
 /** Publishing is deliberate and creates versioned canonical facts. The caller
@@ -148,6 +169,43 @@ export async function publishCandidate(candidateId: string, reviewerNote?: strin
     fail(candidateUpdateError, "Could not mark candidate published");
     await writeAdminAudit("candidate_published", "product", productId, { candidateId, category: "bra" });
     return { category: "bra" as const, productId };
+  }
+
+  if (candidate.product_category === "leggings" || candidate.product_category === "jeans") {
+    const category = candidate.product_category;
+    const attributes = lowerBodyAttributes(category, fields.attributes);
+    const { data: existing, error: existingError } = await client.from("fit_products").select("id").eq("brand_id", currentBrandId).eq("category", category).eq("name", name).maybeSingle();
+    fail(existingError, "Could not look up existing lower-body product");
+    const canonical = {
+      name,
+      category,
+      attributes,
+      material_composition: material,
+      size_system: "brand_specific",
+      size_range: typeof fields.sizeRange === "string" ? fields.sizeRange : null,
+      official_url: candidate.canonical_url,
+      lifecycle_status: "active",
+      current_version: version,
+    };
+    let productId: string;
+    if (existing) {
+      const { data, error } = await client.from("fit_products").update(canonical).eq("id", existing.id as string).select("id").single();
+      fail(error, "Could not update lower-body product");
+      if (!data) throw new Error("Lower-body product update returned no record.");
+      productId = data.id as string;
+    } else {
+      const { data, error } = await client.from("fit_products").insert({ ...canonical, brand_id: currentBrandId, slug: `${slugify(`${brand}-${name}`)}-${candidateId.slice(0, 6)}` }).select("id").single();
+      fail(error, "Could not create lower-body product");
+      if (!data) throw new Error("Lower-body product creation returned no record.");
+      productId = data.id as string;
+    }
+    await recordObservations("fit_product_observations", productId, fields, source);
+    const { error: versionError } = await client.from("fit_product_versions").insert({ product_id: productId, version, change_kind: "created", snapshot: fields });
+    fail(versionError, "Could not create lower-body product version");
+    const { error: candidateUpdateError } = await client.from("ingestion_candidates").update({ status: "published", published_fit_product_id: productId, reviewer_note: reviewerNote?.trim() || null, reviewed_at: new Date().toISOString() }).eq("id", candidateId);
+    fail(candidateUpdateError, "Could not mark candidate published");
+    await writeAdminAudit("candidate_published", "fit_product", productId, { candidateId, category });
+    return { category, productId };
   }
 
   const style = string(fields.style, "tights style");

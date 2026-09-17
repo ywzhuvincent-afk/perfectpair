@@ -69,7 +69,7 @@ const blockedHostSuffixes = [".local", ".internal"];
 const rawFields = [
   "brand", "name", "title", "style", "wire", "cupConstruction", "supportLevel", "material", "sizeRange", "sizes",
   "price", "currency", "availability", "denier", "opacity", "waist", "toe", "compression", "sku", "id", "handle", "url",
-  "productUrl", "canonicalUrl", "category", "updatedAt",
+  "productUrl", "canonicalUrl", "category", "updatedAt", "rise", "stretch", "inseam", "cut", "fit",
 ] as const;
 
 function asString(value: unknown) {
@@ -102,14 +102,18 @@ function parsePolicy(value: unknown): FeedPolicy | null {
   const policy = value as Record<string, unknown>;
   const feedUrl = asString(policy.feedUrl);
   if (policy.format !== "json_catalog_v1" || !feedUrl || !safeHttpsUrl(feedUrl)) return null;
-  const defaultCategory = policy.defaultCategory === "bra" || policy.defaultCategory === "tights" ? policy.defaultCategory : undefined;
+  const defaultCategory = policy.defaultCategory === "bra" || policy.defaultCategory === "tights" || policy.defaultCategory === "leggings" || policy.defaultCategory === "jeans" ? policy.defaultCategory : undefined;
   const requestedLanes = Array.isArray(policy.refreshLanes) ? policy.refreshLanes.filter((lane): lane is RefreshLane => typeof lane === "string" && permittedLanes.has(lane as RefreshLane)) : undefined;
   return { format: "json_catalog_v1", feedUrl, defaultCategory, refreshLanes: requestedLanes?.length ? requestedLanes : ["catalog", "price_availability"] };
 }
 
 function categoryFrom(value: unknown, fallback: ProductCategory | undefined, allowed: ProductCategory[]): ProductCategory | null {
   const normalized = typeof value === "string" ? value.toLowerCase().trim() : "";
-  const category = normalized === "tights" || normalized === "hosiery" || normalized === "pantyhose" ? "tights" : normalized === "bra" || normalized === "bras" ? "bra" : fallback;
+  const category = normalized === "tights" || normalized === "hosiery" || normalized === "pantyhose" ? "tights"
+    : normalized === "bra" || normalized === "bras" ? "bra"
+      : normalized === "legging" || normalized === "leggings" ? "leggings"
+        : normalized === "jean" || normalized === "jeans" || normalized === "denim" ? "jeans"
+          : fallback;
   return category && allowed.includes(category) ? category : null;
 }
 
@@ -162,7 +166,18 @@ function buildNormalizer(source: SourceRow, review: RightsReviewRow) {
     const category = candidate.category ?? "bra";
     const product = category === "bra"
       ? { ...shared, style: asString(raw.style) ?? "other", wire: asString(raw.wire) ?? "unknown", cupConstruction: asString(raw.cupConstruction) ?? "unknown", supportLevel: asNumber(raw.supportLevel) ?? 0 }
-      : { ...shared, style: asString(raw.style) ?? "other", denier: asNumber(raw.denier) ?? 0, opacity: asString(raw.opacity) ?? "unknown", waist: asString(raw.waist) ?? "unknown", toe: asString(raw.toe), compression: asNumber(raw.compression) };
+      : category === "tights"
+        ? { ...shared, style: asString(raw.style) ?? "other", denier: asNumber(raw.denier) ?? 0, opacity: asString(raw.opacity) ?? "unknown", waist: asString(raw.waist) ?? "unknown", toe: asString(raw.toe), compression: asNumber(raw.compression) }
+        : {
+          ...shared,
+          attributes: Object.fromEntries(Object.entries({
+            rise: asString(raw.rise),
+            compression: asString(raw.compression),
+            stretch: asString(raw.stretch),
+            inseam: asString(raw.inseam),
+            cut: asString(raw.cut) ?? asString(raw.fit) ?? asString(raw.style),
+          }).filter(([, value]) => value !== undefined)),
+        };
     const fieldSources = Object.fromEntries(Object.entries(product).filter(([, value]) => value !== undefined && value !== "").map(([key]) => [key, attribution]));
     return { candidate, product, fieldSources };
   };
@@ -170,7 +185,7 @@ function buildNormalizer(source: SourceRow, review: RightsReviewRow) {
 
 function makeAdapter(source: SourceRow, review: RightsReviewRow, checkpoint: CheckpointRow | undefined): SourceAdapter | null {
   const policy = parsePolicy(source.crawl_policy);
-  const allowedCategories = source.allowed_categories.filter((category): category is ProductCategory => category === "bra" || category === "tights");
+  const allowedCategories = source.allowed_categories.filter((category): category is ProductCategory => category === "bra" || category === "tights" || category === "leggings" || category === "jeans");
   if (!policy || !allowedCategories.length) return null;
   const rights: SourceRightsPolicy = {
     termsUrl: review.terms_url ?? source.terms_url ?? undefined,

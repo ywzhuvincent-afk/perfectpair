@@ -45,6 +45,8 @@ export async function getAdminDashboard() {
       count("privacy_data_requests", [["state", "requested"]]),
       count("products", [["lifecycle_status", "active"]]),
       count("tights_products", [["lifecycle_status", "active"]]),
+      count("fit_products", [["lifecycle_status", "active"], ["category", "leggings"]]),
+      count("fit_products", [["lifecycle_status", "active"], ["category", "jeans"]]),
     ]),
   ]);
   throwIfError(candidateResult.error, "Could not load candidate queue");
@@ -56,7 +58,7 @@ export async function getAdminDashboard() {
   throwIfError(intakeResult.error, "Could not load review intake queue");
   throwIfError(braReviewResult.error, "Could not load bra review moderation queue");
   throwIfError(tightsReviewResult.error, "Could not load tights review moderation queue");
-  const [candidates, contributionsToReview, gaps, activeSources, draftReviews, braReviews, tightsReviews, unmatchedReviews, privacyRequests, publishedBras, publishedTights] = summary;
+  const [candidates, contributionsToReview, gaps, activeSources, draftReviews, braReviews, tightsReviews, unmatchedReviews, privacyRequests, publishedBras, publishedTights, publishedLeggings, publishedJeans] = summary;
   return {
     summary: {
       candidates,
@@ -68,6 +70,8 @@ export async function getAdminDashboard() {
       draftSourceReviews: draftReviews,
       publishedBras,
       publishedTights,
+      publishedLeggings,
+      publishedJeans,
     },
     candidates: candidateResult.data ?? [],
     contributions: contributionResult.data ?? [],

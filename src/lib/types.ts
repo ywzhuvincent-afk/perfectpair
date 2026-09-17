@@ -1,6 +1,9 @@
 /** Shared domain model for the bra-first PerfectPair MVP. */
 export type DataLayer = "manufacturer" | "community" | "editorial_lab";
-export type ProductCategory = "bra" | "tights";
+/** Every category which can enter the source, review and publishing pipeline.
+ * The public discovery UI may expose a subset while a category is still being
+ * researched, but the private evidence trail stays consistent across all four. */
+export type ProductCategory = "bra" | "tights" | "leggings" | "jeans";
 export type Confidence = "emerging" | "developing" | "established" | "verified";
 export type FitLabel = "runs_small" | "true_to_size" | "runs_large" | "varies";
 export type SourceKind = "official" | "affiliate_feed" | "partner_api" | "public_page" | "retailer_feed" | "physical_audit" | "contributor_evidence" | "community" | "lab";

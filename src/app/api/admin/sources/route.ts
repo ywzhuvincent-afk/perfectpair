@@ -12,7 +12,7 @@ const sourceSchema = z.object({
   baseUrl: httpsUrl.optional().or(z.literal("")),
   termsUrl: httpsUrl,
   robotsUrl: httpsUrl.optional().or(z.literal("")),
-  categories: z.array(z.enum(["bra", "tights"])).min(1).max(2),
+  categories: z.array(z.enum(["bra", "tights", "leggings", "jeans"])).min(1).max(4),
   refreshHours: z.number().int().min(1).max(720),
   allowedFields: z.array(z.string().trim().min(1).max(80)).min(3).max(32),
   sourceKind: z.enum(["official", "affiliate_feed", "partner_api", "retailer_feed"]),
