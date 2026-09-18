@@ -1,6 +1,5 @@
-import { representativeBrands } from "@/lib/mock-data";
-import { tightsProducts } from "@/lib/tights";
 import type { ProductCategory } from "@/lib/types";
+import { CATALOG_BRAND_GOAL, catalogCoverageTargets, type CatalogCoverageTarget } from "./catalog-100-targets";
 import { sourceRegistry } from "./sources";
 
 export type AcquisitionChannel =
@@ -36,29 +35,29 @@ export interface BrandSourceReadiness extends BrandSourceTarget {
   blockers: string[];
 }
 
-const braFacts = [
-  "brand", "productFamily", "productName", "merchantSku", "canonicalProductUrl",
-  "variantId", "style", "wire", "cupConstruction", "supportLevel", "material",
-  "sizeSystem", "sizeChartVersion", "sizeRange", "bandRange", "cupRange",
-  "price", "currency", "availability", "countryOrMarket", "lastUpdatedAt",
-];
-
-const tightsFacts = [
-  "brand", "productFamily", "productName", "merchantSku", "canonicalProductUrl",
-  "variantId", "denier", "opacity", "waist", "toe", "compression", "material",
-  "sizeSystem", "sizeChartVersion", "sizeRange", "price", "currency", "availability",
-  "countryOrMarket", "lastUpdatedAt",
-];
+const requiredFactsByCategory: Record<ProductCategory, string[]> = {
+  bra: [
+    "brand", "productFamily", "productName", "canonicalProductUrl", "style", "wire", "cupConstruction",
+    "supportLevel", "material", "sizeSystem", "sizeChartVersion", "sizeRange", "bandRange", "cupRange", "lastUpdatedAt",
+  ],
+  tights: [
+    "brand", "productFamily", "productName", "canonicalProductUrl", "denier", "opacity", "waist", "toe",
+    "compression", "material", "sizeSystem", "sizeChartVersion", "sizeRange", "lastUpdatedAt",
+  ],
+  leggings: [
+    "brand", "productFamily", "productName", "canonicalProductUrl", "rise", "inseam", "compression", "stretch",
+    "material", "sizeSystem", "sizeRange", "lastUpdatedAt",
+  ],
+  jeans: [
+    "brand", "productFamily", "productName", "canonicalProductUrl", "rise", "leg", "thighFit", "stretch",
+    "material", "sizeSystem", "sizeRange", "lastUpdatedAt",
+  ],
+};
 
 const excludedWithoutWrittenLicence = [
   "product images and image URLs", "long product descriptions", "brand editorial copy",
   "logos and other creative assets", "merchant review text",
 ];
-
-const initialBraBrands = new Set([
-  "ThirdLove", "Panache", "Freya", "Wacoal", "Natori", "Chantelle", "Elomi",
-  "Aerie", "Knix", "Harper Wilde", "Understance", "Felina",
-]);
 
 function idFor(brand: string) {
   return brand
@@ -69,12 +68,12 @@ function idFor(brand: string) {
     .replace(/(^-|-$)/g, "");
 }
 
-function createTarget(brand: string, category: ProductCategory, launchWave: 1 | 2): BrandSourceTarget {
+function createTarget(target: CatalogCoverageTarget): BrandSourceTarget {
   return {
-    id: `${category}-${idFor(brand)}`,
-    brand,
-    categories: [category],
-    launchWave,
+    id: `${target.category}-${idFor(target.brand)}`,
+    brand: target.brand,
+    categories: [target.category],
+    launchWave: target.launchWave,
     state: "awaiting_authorized_access",
     channelOrder: [
       "brand_claim_portal",
@@ -84,22 +83,16 @@ function createTarget(brand: string, category: ProductCategory, launchWave: 1 | 
       "physical_sample_audit",
       "verified_contributor_evidence",
     ],
-    requiredFacts: category === "bra" ? braFacts : tightsFacts,
+    requiredFacts: requiredFactsByCategory[target.category],
     excludedWithoutWrittenLicence,
   };
 }
 
 /**
- * This is the complete brand universe currently promised by the directory.
- * It deliberately contains no guessed API endpoint, credential, or licence.
- * A target becomes an enabled SourceAdapter only after a real source review.
+ * The 100-brand growth queue is a coverage backlog, not a claim that those
+ * brands are already searchable or that PerfectPair has their image rights.
  */
-export const brandSourceTargets: BrandSourceTarget[] = [
-  ...representativeBrands.map((brand) => createTarget(brand, "bra", initialBraBrands.has(brand) ? 1 : 2)),
-  ...Array.from(new Set(tightsProducts.map((product) => product.brand)))
-    .sort((left, right) => left.localeCompare(right))
-    .map((brand) => createTarget(brand, "tights", 1)),
-];
+export const brandSourceTargets: BrandSourceTarget[] = catalogCoverageTargets.map(createTarget);
 
 export function getBrandSourceReadiness(): BrandSourceReadiness[] {
   return brandSourceTargets.map((target) => {
@@ -113,9 +106,9 @@ export function getBrandSourceReadiness(): BrandSourceReadiness[] {
       blockers: linkedSourceIds.length
         ? []
         : [
-            "No authorised data channel has been recorded for this brand.",
-            "Commercial price and availability require a current licensed retailer, distributor, PIM/GDSN or brand source.",
-            "Independent fit facts may be collected through a physical audit or consented contributor evidence, then reviewed before publication.",
+            "No authorised or verified fact source has been recorded for this brand.",
+            "Images, long descriptions, retailer reviews, price and stock stay excluded unless a current written licence explicitly permits them.",
+            "A public product record needs a source URL, at least the category's required fit facts, field-level provenance and a version record.",
           ],
     };
   });
@@ -124,11 +117,14 @@ export function getBrandSourceReadiness(): BrandSourceReadiness[] {
 export function getBrandSourceRosterSummary() {
   const readiness = getBrandSourceReadiness();
   return {
+    targetBrands: CATALOG_BRAND_GOAL,
     totalBrands: readiness.length,
     braBrands: readiness.filter((target) => target.categories.includes("bra")).length,
     tightsBrands: readiness.filter((target) => target.categories.includes("tights")).length,
+    leggingsBrands: readiness.filter((target) => target.categories.includes("leggings")).length,
+    jeansBrands: readiness.filter((target) => target.categories.includes("jeans")).length,
     launchWaveOne: readiness.filter((target) => target.launchWave === 1).length,
     activeSources: readiness.filter((target) => target.linkedSourceIds.length > 0).length,
-    status: "No live brand source is enabled until its access, field scope and publication rights are documented.",
+    status: "A 100-brand coverage queue is active. A target becomes searchable only after source, fields, rights and provenance pass review.",
   };
 }
