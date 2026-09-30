@@ -142,3 +142,14 @@ footer { width:min(100% - 48px, 1200px); display:flex; justify-content:space-bet
 @media (max-width: 760px) { .admin-gate form, .admin-header, .admin-table article { align-items:stretch; flex-direction:column; }.admin-header-actions, .admin-row-actions { justify-content:flex-start; }.admin-metric-grid { grid-template-columns:repeat(2, 1fr); }.admin-metric-grid article:nth-child(n) { padding:18px 12px; border-right:1px solid var(--line); }.admin-metric-grid article:nth-child(2n) { border-right:0; }.admin-split { grid-template-columns:1fr; gap:34px; }.admin-source-form .fields, .admin-source-form .fields:not(.three) { grid-template-columns:1fr; }.admin-run-count { text-align:left; } }
 
 @media (max-width: 760px) { .pass-it-forward-page { padding-top:35px; }.pass-forward-hero, .handoff-form-section { grid-template-columns:1fr; gap:27px; }.pass-forward-hero { align-items:start; }.pass-forward-rules { grid-template-columns:1fr; padding:23px 0 31px; }.pass-forward-rules article, .pass-forward-rules article + article { min-height:0; padding:17px 0; border-right:0; border-bottom:1px solid var(--line); }.pass-forward-rules article:last-child { border-bottom:0; }.handoff-form { grid-template-columns:1fr; }.handoff-form label:nth-child(2), .handoff-submit { grid-column:auto; }.handoff-submit, .handoff-drafts .section-heading, .handoff-draft-list article { align-items:flex-start; flex-direction:column; }.handoff-draft-actions { justify-content:flex-start; }.category-door { min-height:300px; }.category-door h2 { font-size:43px; } }
+
+/* Language switch and Chinese typography */
+.header-end { display:flex; align-items:center; gap:16px; }
+.lang-toggle { display:inline-flex; padding:2px; border:1px solid var(--line); border-radius:999px; background:var(--paper); }
+.lang-toggle button { border:0; background:transparent; padding:4px 10px; border-radius:999px; color:var(--muted); font:inherit; font-size:11px; font-weight:700; cursor:pointer; }
+.lang-toggle button.active { background:var(--plum); color:#fff; }
+.lang-toggle[aria-busy="true"] { opacity:.6; }
+html:lang(zh) { --sans:var(--font-sans), "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif; --serif:var(--font-serif), "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif; }
+html:lang(zh) h1, html:lang(zh) h2, html:lang(zh) h3 { letter-spacing:0; }
+html:lang(zh) h1 { line-height:1.15; }
+html:lang(zh) .eyebrow { letter-spacing:.5px; }
